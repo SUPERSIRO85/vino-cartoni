@@ -134,6 +134,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ord-tot { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 14px; }
 .ord-tot b { color: var(--fg); font-size: 17px; font-variant-numeric: tabular-nums; }
 .sync { font-size: 12px; color: var(--muted); }
+.ord-btns { display: flex; gap: 8px; flex: 0 0 auto; }
+.ord-edit { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
+.editbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; color: var(--accent); font-weight: 600; }
+.editbar button { font: inherit; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -148,6 +152,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
   <section>
     <h2>Il tuo ordine</h2>
+    <div class="editbar" id="editbar" hidden><span id="edittxt"></span><button id="editcancel" type="button">Annulla modifica</button></div>
     <div class="box">
       <div class="name-row">
         <label for="nome">Nome</label>
@@ -196,7 +201,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   nomeEl.value = load("vino_nome", "") || "";
   nomeEl.addEventListener("input", function () { save("vino_nome", nomeEl.value); hideMsg(); updateGo(); });
 
-  function rem(w) { return Math.max(0, w.cartoni - w.venduti); }
+  var editing = null;      // {id, orig:{vino:cartoni}, nome, prevNome} quando l'amministratore modifica un ordine
+  var editbarEl = $("editbar"), edittxtEl = $("edittxt");
+  function rem(w) {
+    var own = editing ? (editing.orig[w.id] || 0) : 0;
+    return Math.max(0, w.cartoni - w.venduti + own);
+  }
+  function updateEditUI() {
+    editbarEl.hidden = !editing;
+    if (editing) edittxtEl.textContent = "Stai modificando l'ordine di " + editing.nome + ".";
+    goEl.textContent = editing ? "Salva modifiche" : "Ordina";
+  }
+  function startEdit(o) {
+    var prev = editing ? editing.prevNome : nomeEl.value;
+    editing = { id: o.id, orig: Object.assign({}, o.righe), nome: o.nome, prevNome: prev };
+    draft = Object.assign({}, o.righe);
+    nomeEl.value = o.nome;
+    hideMsg(); clampDraft(); updateEditUI(); paint();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function endEdit() {
+    if (!editing) return;
+    nomeEl.value = editing.prevNome || "";
+    editing = null; draft = {};
+    hideMsg(); updateEditUI(); paint();
+  }
+  $("editcancel").addEventListener("click", endEdit);
   function wineById(id) { return state.vini.filter(function (w) { return w.id === id; })[0]; }
   function hideMsg() { msgEl.hidden = true; msgEl.textContent = ""; }
   function showMsg(t) { msgEl.textContent = t; msgEl.hidden = false; }
@@ -275,6 +305,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       var top = el("div", "ord-top");
       top.appendChild(el("div", "ord-name", o.nome));
       var isMine = mine.some(function (m) { return m.id === o.id; });
+      var btns = el("div", "ord-btns");
+      if (admin) {
+        var eb = el("button", "ord-edit", "Modifica"); eb.type = "button";
+        eb.addEventListener("click", function () { startEdit(o); });
+        btns.appendChild(eb);
+      }
       if (isMine || admin) {
         var b = el("button", "ord-del", "Annulla ordine"); b.type = "button";
         var timer = null;
@@ -286,8 +322,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           }
           clearTimeout(timer); cancelOrder(o.id, b);
         });
-        top.appendChild(b);
+        btns.appendChild(b);
       }
+      if (btns.children.length) top.appendChild(btns);
       card.appendChild(top);
       var cart = 0, money = 0;
       state.vini.forEach(function (w) {
@@ -348,14 +385,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (!nome) { showMsg("Scrivi il tuo nome."); return; }
     if (!Object.keys(draft).length) { showMsg("Scegli almeno un cartone."); return; }
     busy = true; goEl.textContent = "Invio…"; updateGo(); hideMsg();
-    fetch("/api/ordine", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+    var isEdit = !!editing;
+    var hdrs = { "content-type": "application/json" };
+    if (isEdit) hdrs["x-admin"] = admin;
+    fetch(isEdit ? "/api/ordine?id=" + encodeURIComponent(editing.id) : "/api/ordine", {
+      method: isEdit ? "PUT" : "POST",
+      headers: hdrs,
       body: JSON.stringify({ nome: nome, righe: draft })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
     }).then(function (res) {
       if (res.status === 200 && res.body.id) {
+        if (isEdit) {
+          endEdit();
+          showBanner("Ordine di " + nome + " modificato.");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return refresh();
+        }
         mine.push({ id: res.body.id, token: res.body.token }); save("vino_miei", mine);
         draft = {};
         showBanner("Ordine confermato. Grazie " + nome + "!");
@@ -370,7 +416,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }).catch(function () {
       showMsg("Connessione assente. Riprova tra poco.");
     }).then(function () {
-      busy = false; goEl.textContent = "Ordina"; updateGo();
+      busy = false; updateEditUI(); updateGo();
     });
   });
 
