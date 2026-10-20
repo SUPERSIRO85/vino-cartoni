@@ -15,7 +15,7 @@ async function leggiRighe(body, env) {
     if (!Number.isInteger(qty) || qty < 0 || qty > 99) return { errore: json({ error: "Quantità non valida." }, 400) };
     if (qty > 0) righe.push([wid, qty]);
   }
-  if (!righe.length) return { errore: json({ error: "Scegli almeno un cartone." }, 400) };
+  if (!righe.length) return { errore: json({ error: "Scegli almeno un cartone o una bottiglia." }, 400) };
   return { nome, righe };
 }
 

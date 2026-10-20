@@ -33,3 +33,11 @@ INSERT OR IGNORE INTO wines (id, cantina, nome, cartoni, bottiglie, prezzo, ord)
   ('zenato-soave',    'Zenato',     'Soave',       6, 3, 40, 4),
   ('zenato-bardolino','Zenato',     'Bardolino',   5, 0, 40, 5),
   ('zenato-custoza',  'Zenato',     'Custoza',     6, 4, 40, 6);
+
+-- Bottiglie singole avanzate (id che finisce con -b): prezzo = cartone / 6
+INSERT OR IGNORE INTO wines (id, cantina, nome, cartoni, bottiglie, prezzo, ord) VALUES
+  ('nani-extra-brut-b', 'Nani Rizzi', 'Extra Brut', 3, 0, 7.5, 11),
+  ('nani-brut-b',       'Nani Rizzi', 'Brut',       5, 0, 7.5, 12),
+  ('nani-extra-dry-b',  'Nani Rizzi', 'Extra Dry',  1, 0, 7.5, 13),
+  ('zenato-soave-b',    'Zenato',     'Soave',      3, 0, 6.7, 14),
+  ('zenato-custoza-b',  'Zenato',     'Custoza',    4, 0, 6.7, 16);

@@ -145,7 +145,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 <main>
   <header>
     <h1>Vino da vendere</h1>
-    <p class="lead">Scrivi il tuo nome, scegli i cartoni che vuoi e premi Ordina. Puoi prendere più vini insieme. I cartoni che restano si aggiornano da soli.</p>
+    <p class="lead">Scrivi il tuo nome, scegli i cartoni (o le bottiglie singole avanzate) che vuoi e premi Ordina. Puoi prendere più vini insieme. I cartoni che restano si aggiornano da soli.</p>
   </header>
 
   <div class="banner" id="banner" hidden></div>
@@ -227,6 +227,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     hideMsg(); updateEditUI(); paint();
   }
   $("editcancel").addEventListener("click", endEdit);
+  function isB(w) { return /-b$/.test(w.id); }
+  function cnt(n, b) { return b ? (n === 1 ? "1 bottiglia" : fmt(n) + " bottiglie") : (n === 1 ? "1 cartone" : fmt(n) + " cartoni"); }
+  function totTxt(c, b) { var p = []; if (c || !b) p.push(cnt(c, false)); if (b) p.push(cnt(b, true)); return p.join(" + "); }
   function wineById(id) { return state.vini.filter(function (w) { return w.id === id; })[0]; }
   function hideMsg() { msgEl.hidden = true; msgEl.textContent = ""; }
   function showMsg(t) { msgEl.textContent = t; msgEl.hidden = false; }
@@ -246,15 +249,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       var row = el("div", "wine");
       var info = el("div", "info");
       info.appendChild(el("b", null, w.nome));
-      var sub = w.cantina + " · " + eur(w.prezzo) + " a cartone" + (w.bottiglie ? " · +" + w.bottiglie + " bott. sfuse" : "");
+      var sub = w.cantina + " · " + eur(w.prezzo) + (isB(w) ? " a bottiglia" : " a cartone");
       info.appendChild(el("small", null, sub));
       var remEl = el("div", "rem");
       info.appendChild(remEl);
       var step = el("div", "step");
-      var minus = el("button", null, "−"); minus.type = "button"; minus.setAttribute("aria-label", "Un cartone in meno: " + w.nome);
+      var minus = el("button", null, "−"); minus.type = "button"; minus.setAttribute("aria-label", (isB(w) ? "Una bottiglia in meno: " : "Un cartone in meno: ") + w.nome);
       var inp = el("input"); inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.step = "1"; inp.placeholder = "0";
       inp.id = "q-" + w.id; inp.setAttribute("aria-label", "Cartoni di " + w.nome);
-      var plus = el("button", null, "+"); plus.type = "button"; plus.setAttribute("aria-label", "Un cartone in più: " + w.nome);
+      var plus = el("button", null, "+"); plus.type = "button"; plus.setAttribute("aria-label", (isB(w) ? "Una bottiglia in più: " : "Un cartone in più: ") + w.nome);
       step.append(minus, inp, plus);
       row.append(info, step);
       winesEl.appendChild(row);
@@ -273,21 +276,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
 
   function paint() {
-    var cart = 0, money = 0;
+    var cart = 0, bot = 0, money = 0;
     state.vini.forEach(function (w) {
       var r = rows[w.id]; if (!r) return;
       var q = draft[w.id] || 0, left = rem(w);
-      cart += q; money += q * w.prezzo;
+      if (isB(w)) bot += q; else cart += q;
+      money += q * w.prezzo;
       r.row.classList.toggle("has", q > 0);
       r.row.classList.toggle("out", left <= 0);
-      r.rem.textContent = left <= 0 ? "esaurito" : (left === 1 ? "resta 1 cartone" : "restano " + fmt(left) + " cartoni");
+      r.rem.textContent = left <= 0 ? "esaurito" : (left === 1 ? "resta " + cnt(1, isB(w)) : "restano " + cnt(left, isB(w)));
       if (document.activeElement !== r.inp) r.inp.value = q ? String(q) : "";
       r.inp.max = String(left);
       r.inp.disabled = left <= 0;
       r.plus.disabled = left <= 0 || q >= left;
       r.minus.disabled = q <= 0;
     });
-    tCart.textContent = cart === 1 ? "1 cartone" : fmt(cart) + " cartoni";
+    tCart.textContent = totTxt(cart, bot);
     tEur.textContent = eur(money);
     updateGo();
   }
@@ -326,17 +330,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
       if (btns.children.length) top.appendChild(btns);
       card.appendChild(top);
-      var cart = 0, money = 0;
+      var cart = 0, bot = 0, money = 0;
       state.vini.forEach(function (w) {
         var q = o.righe[w.id]; if (!q) return;
-        cart += q; money += q * w.prezzo;
+        if (isB(w)) bot += q; else cart += q;
+        money += q * w.prezzo;
         var line = el("div", "ord-line");
         line.appendChild(el("b", null, fmt(q)));
-        line.appendChild(el("span", null, w.nome + " · " + w.cantina));
+        line.appendChild(el("span", null, w.nome + " · " + w.cantina + (isB(w) ? " (bottiglie)" : "")));
         card.appendChild(line);
       });
       var tot = el("div", "ord-tot");
-      tot.appendChild(el("span", null, "Totale " + (cart === 1 ? "1 cartone" : fmt(cart) + " cartoni")));
+      tot.appendChild(el("span", null, "Totale " + totTxt(cart, bot)));
       tot.appendChild(el("b", null, eur(money)));
       card.appendChild(tot);
       ordersEl.appendChild(card);
@@ -383,7 +388,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   goEl.addEventListener("click", function () {
     var nome = nomeEl.value.trim();
     if (!nome) { showMsg("Scrivi il tuo nome."); return; }
-    if (!Object.keys(draft).length) { showMsg("Scegli almeno un cartone."); return; }
+    if (!Object.keys(draft).length) { showMsg("Scegli almeno un cartone o una bottiglia."); return; }
     busy = true; goEl.textContent = "Invio…"; updateGo(); hideMsg();
     var isEdit = !!editing;
     var hdrs = { "content-type": "application/json" };
