@@ -438,7 +438,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function setClosed(o, v, btn) {
     btn.disabled = true;
     fetch("/api/ordine?id=" + encodeURIComponent(o.id), { method: "PATCH", headers: { "content-type": "application/json", "x-admin": admin }, body: JSON.stringify({ chiuso: v ? 1 : 0 }) })
-      .then(function (r) { showBanner(r.ok ? (v ? "Ordine segnato come consegnato e pagato." : "Ordine riaperto.") : "Non sono riuscito ad aggiornare l'ordine."); if (!r.ok) btn.disabled = false; return refresh(); })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+        showBanner(r.ok ? (v ? "Ordine segnato come consegnato e pagato." : "Ordine riaperto.") : "Non sono riuscito ad aggiornare l'ordine (errore " + r.status + (j.error ? ": " + j.error : "") + ").");
+        if (!r.ok) btn.disabled = false; return refresh(); }); })
       .catch(function () { btn.disabled = false; showBanner("Connessione assente. Riprova tra poco."); });
   }
 
