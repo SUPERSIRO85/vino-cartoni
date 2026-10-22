@@ -119,6 +119,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .go:disabled { opacity: 0.55; cursor: default; }
 .msg { padding: 12px 14px; font-size: 14px; border-top: 1px solid var(--line); }
 .msg.err { color: var(--warn); }
+.sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.sum div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 10px; min-width: 0; }
+.sum small { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.sum b { font-family: var(--font-display); font-size: 1.15rem; overflow-wrap: anywhere; }
+.sum .inc b { color: var(--ok); }
 .banner { background: var(--surface); border: 1px solid var(--ok); color: var(--ok); border-radius: 12px; padding: 14px 16px; font-weight: 600; }
 .note { border: 1px dashed var(--line); border-radius: 12px; padding: 14px 16px; color: var(--muted); }
 .note.err { color: var(--warn); }
@@ -148,6 +153,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   <header>
     <h1>Vino da vendere</h1>
     <p class="lead">Scrivi il tuo nome, scegli i cartoni (o le bottiglie singole avanzate) che vuoi e premi Ordina. Puoi prendere più vini insieme. I cartoni che restano si aggiornano da soli.</p>
+    <div class="sum" id="sum" hidden>
+      <div class="inc"><small>Incassato</small><b id="s-inc">0 €</b></div>
+      <div><small>Ordinato</small><b id="s-ord">0 €</b></div>
+      <div><small>Obiettivo</small><b id="s-obj">0 €</b></div>
+    </div>
   </header>
 
   <div class="banner" id="banner" hidden></div>
@@ -360,6 +370,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     oh.textContent = list.length ? "Ordini confermati (" + list.length + ")" : "Ordini confermati";
   }
 
+  function renderSum() {
+    var sumEl = $("sum");
+    sumEl.hidden = !admin;
+    if (!admin) return;
+    var price = {}, obj = 0, inc = 0, ord = 0;
+    state.vini.forEach(function (w) { price[w.id] = w.prezzo; obj += w.cartoni * w.prezzo; });
+    state.ordini.forEach(function (o) {
+      var t = 0;
+      Object.keys(o.righe).forEach(function (id) { t += o.righe[id] * (price[id] || 0); });
+      ord += t; if (o.chiuso) inc += t;
+    });
+    $("s-inc").textContent = eur(inc); $("s-ord").textContent = eur(ord); $("s-obj").textContent = eur(obj);
+  }
+
   function apply(data) {
     var nsig = data.vini.map(function (w) { return w.id + "|" + w.nome + "|" + w.cantina + "|" + w.prezzo; }).join(";");
     state = data;
@@ -369,6 +393,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (nsig !== sig) { sig = nsig; buildRows(); }
     paint();
     renderOrders();
+    renderSum();
   }
 
   function refresh() {
