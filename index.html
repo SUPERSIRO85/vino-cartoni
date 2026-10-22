@@ -372,8 +372,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
   function renderSum() {
     var sumEl = $("sum");
-    sumEl.hidden = !admin;
-    if (!admin) return;
+    sumEl.hidden = false;
     var price = {}, obj = 0, inc = 0, ord = 0;
     state.vini.forEach(function (w) { price[w.id] = w.prezzo; obj += w.cartoni * w.prezzo; });
     state.ordini.forEach(function (o) {
