@@ -125,7 +125,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .orders { display: grid; gap: 10px; }
 .ord { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
-.ord-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ord-top { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 6px; }
 .ord-name { font-family: var(--font-display); font-size: 1.2rem; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
 .ord-del { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
 .ord-del.armed { color: var(--accent); border-color: var(--accent); font-weight: 600; }
@@ -136,7 +136,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sync { font-size: 12px; color: var(--muted); }
 .ord.done { opacity: .55; filter: grayscale(1); background: var(--line); }
 .ord-done { font-size: 12px; font-weight: 600; color: var(--muted); }
-.ord-btns { display: flex; gap: 8px; flex: 0 0 auto; }
+.ord-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .ord-edit { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
 .editbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; color: var(--accent); font-weight: 600; }
 .editbar button { font: inherit; font-size: 14px; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; cursor: pointer; }
