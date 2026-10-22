@@ -134,6 +134,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ord-tot { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 14px; }
 .ord-tot b { color: var(--fg); font-size: 17px; font-variant-numeric: tabular-nums; }
 .sync { font-size: 12px; color: var(--muted); }
+.ord.done { opacity: .55; filter: grayscale(1); background: var(--line); }
+.ord-done { font-size: 12px; font-weight: 600; color: var(--muted); }
 .ord-btns { display: flex; gap: 8px; flex: 0 0 auto; }
 .ord-edit { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
 .editbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; color: var(--accent); font-weight: 600; }
@@ -310,12 +312,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       top.appendChild(el("div", "ord-name", o.nome));
       var isMine = mine.some(function (m) { return m.id === o.id; });
       var btns = el("div", "ord-btns");
+      var closed = !!o.chiuso;
+      if (closed) card.classList.add("done");
       if (admin) {
+        var cb = el("button", "ord-edit", closed ? "Riapri" : "Consegnato e pagato"); cb.type = "button";
+        cb.addEventListener("click", function () { setClosed(o, !closed, cb); });
+        btns.appendChild(cb);
+      }
+      if (closed) { if (!admin) btns.appendChild(el("span", "ord-done", "Consegnato e pagato")); }
+      else if (admin) {
         var eb = el("button", "ord-edit", "Modifica"); eb.type = "button";
         eb.addEventListener("click", function () { startEdit(o); });
         btns.appendChild(eb);
       }
-      if (isMine || admin) {
+      if (!closed && (isMine || admin)) {
         var b = el("button", "ord-del", "Annulla ordine"); b.type = "button";
         var timer = null;
         b.addEventListener("click", function () {
@@ -424,6 +434,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       busy = false; updateEditUI(); updateGo();
     });
   });
+
+  function setClosed(o, v, btn) {
+    btn.disabled = true;
+    fetch("/api/ordine?id=" + encodeURIComponent(o.id), { method: "PATCH", headers: { "content-type": "application/json", "x-admin": admin }, body: JSON.stringify({ chiuso: v ? 1 : 0 }) })
+      .then(function (r) { showBanner(r.ok ? (v ? "Ordine segnato come consegnato e pagato." : "Ordine riaperto.") : "Non sono riuscito ad aggiornare l'ordine."); if (!r.ok) btn.disabled = false; return refresh(); })
+      .catch(function () { btn.disabled = false; showBanner("Connessione assente. Riprova tra poco."); });
+  }
 
   function cancelOrder(id, btn) {
     var m = mine.filter(function (x) { return x.id === id; })[0];

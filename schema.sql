@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   nome TEXT NOT NULL,
   token TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  chiuso INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS order_lines (
@@ -41,3 +42,6 @@ INSERT OR IGNORE INTO wines (id, cantina, nome, cartoni, bottiglie, prezzo, ord)
   ('nani-extra-dry-b',  'Nani Rizzi', 'Extra Dry',  1, 0, 7.5, 13),
   ('zenato-soave-b',    'Zenato',     'Soave',      3, 0, 6.7, 14),
   ('zenato-custoza-b',  'Zenato',     'Custoza',    4, 0, 6.7, 16);
+
+-- Database già esistente: aggiungere la colonna (una volta sola)
+-- ALTER TABLE orders ADD COLUMN chiuso INTEGER NOT NULL DEFAULT 0;

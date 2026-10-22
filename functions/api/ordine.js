@@ -61,8 +61,9 @@ export async function onRequestPut({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "richiesta non valida" }, 400); }
 
-  const exists = await env.DB.prepare("SELECT id FROM orders WHERE id = ?1").bind(id).first();
+  const exists = await env.DB.prepare("SELECT id, chiuso FROM orders WHERE id = ?1").bind(id).first();
   if (!exists) return json({ error: "ordine non trovato" }, 404);
+  if (exists.chiuso) return json({ error: "Ordine consegnato e pagato: riaprilo per modificarlo." }, 409);
 
   const r = await leggiRighe(body, env);
   if (r.errore) return r.errore;
@@ -98,6 +99,18 @@ export async function onRequestPut({ request, env }) {
   return json({ id });
 }
 
+export async function onRequestPatch({ request, env }) {
+  if (!env.DB) return json({ error: "database non collegato" }, 500);
+  const id = new URL(request.url).searchParams.get("id") || "";
+  const admin = request.headers.get("x-admin") || "";
+  if (!env.ADMIN_KEY || !admin || admin !== env.ADMIN_KEY) return json({ error: "non autorizzato" }, 403);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "richiesta non valida" }, 400); }
+  const res = await env.DB.prepare("UPDATE orders SET chiuso = ?1 WHERE id = ?2").bind(body.chiuso ? 1 : 0, id).run();
+  if (!res.meta || !res.meta.changes) return json({ error: "ordine non trovato" }, 404);
+  return json({ id, chiuso: body.chiuso ? 1 : 0 });
+}
+
 export async function onRequestDelete({ request, env }) {
   if (!env.DB) return json({ error: "database non collegato" }, 500);
   const url = new URL(request.url);
@@ -111,17 +124,19 @@ export async function onRequestDelete({ request, env }) {
     token = row.token;
   }
   if (!id || !token) return json({ error: "non autorizzato" }, 403);
+  const cur = await env.DB.prepare("SELECT chiuso FROM orders WHERE id = ?1").bind(id).first();
+  if (cur && cur.chiuso) return json({ error: "Ordine consegnato e pagato: non si può annullare." }, 409);
 
   const res = await env.DB.batch([
     env.DB.prepare(
       "UPDATE wines SET venduti = venduti - (SELECT qty FROM order_lines WHERE order_id = ?1 AND wine_id = wines.id) " +
       "WHERE id IN (SELECT wine_id FROM order_lines WHERE order_id = ?1) " +
-      "AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2)"
+      "AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0)"
     ).bind(id, token),
     env.DB.prepare(
-      "DELETE FROM order_lines WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2)"
+      "DELETE FROM order_lines WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0)"
     ).bind(id, token),
-    env.DB.prepare("DELETE FROM orders WHERE id = ?1 AND token = ?2").bind(id, token),
+    env.DB.prepare("DELETE FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0").bind(id, token),
   ]);
   const changed = res[2] && res[2].meta ? res[2].meta.changes : 0;
   if (!changed) return json({ error: "ordine non trovato" }, 404);
