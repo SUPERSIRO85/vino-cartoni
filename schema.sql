@@ -45,3 +45,7 @@ INSERT OR IGNORE INTO wines (id, cantina, nome, cartoni, bottiglie, prezzo, ord)
 
 -- Database già esistente: aggiungere la colonna (una volta sola)
 -- ALTER TABLE orders ADD COLUMN chiuso INTEGER NOT NULL DEFAULT 0;
+-- Consegnato e pagato separati (database già esistente):
+-- ALTER TABLE orders ADD COLUMN consegnato INTEGER NOT NULL DEFAULT 0;
+-- ALTER TABLE orders ADD COLUMN pagato INTEGER NOT NULL DEFAULT 0;
+-- UPDATE orders SET consegnato = chiuso, pagato = chiuso;

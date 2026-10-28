@@ -140,6 +140,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ord-tot b { color: var(--fg); font-size: 17px; font-variant-numeric: tabular-nums; }
 .sync { font-size: 12px; color: var(--muted); }
 .ord.done { opacity: .55; filter: grayscale(1); background: var(--line); }
+.ord-edit.on { background: var(--accent); color: #fff; }
 .ord-done { font-size: 12px; font-weight: 600; color: var(--muted); }
 .ord-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .ord-edit { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
@@ -322,15 +323,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       top.appendChild(el("div", "ord-name", o.nome));
       var isMine = mine.some(function (m) { return m.id === o.id; });
       var btns = el("div", "ord-btns");
-      var closed = !!o.chiuso;
-      if (closed) card.classList.add("done");
+      var closed = !!(o.consegnato || o.pagato);
+      if (o.consegnato && o.pagato) card.classList.add("done");
       if (admin) {
-        var cb = el("button", "ord-edit", closed ? "Riapri" : "Consegnato e pagato"); cb.type = "button";
-        cb.addEventListener("click", function () { setClosed(o, !closed, cb); });
-        btns.appendChild(cb);
+        [["consegnato", "Consegnato", "Segna consegnato"], ["pagato", "Pagato", "Segna pagato"]].forEach(function (f) {
+          var on = !!o[f[0]];
+          var cb = el("button", "ord-edit" + (on ? " on" : ""), on ? "✓ " + f[1] : f[2]); cb.type = "button";
+          cb.addEventListener("click", function () { setFlag(o, f[0], !on, cb); });
+          btns.appendChild(cb);
+        });
+      } else if (closed) {
+        var st = [];
+        if (o.consegnato) st.push("Consegnato");
+        if (o.pagato) st.push("Pagato");
+        btns.appendChild(el("span", "ord-done", st.join(" · ")));
       }
-      if (closed) { if (!admin) btns.appendChild(el("span", "ord-done", "Consegnato e pagato")); }
-      else if (admin) {
+      if (!closed && admin) {
         var eb = el("button", "ord-edit", "Modifica"); eb.type = "button";
         eb.addEventListener("click", function () { startEdit(o); });
         btns.appendChild(eb);
@@ -378,7 +386,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     state.ordini.forEach(function (o) {
       var t = 0;
       Object.keys(o.righe).forEach(function (id) { t += o.righe[id] * (price[id] || 0); });
-      ord += t; if (o.chiuso) inc += t;
+      ord += t; if (o.pagato) inc += t;
     });
     $("s-inc").textContent = eur(inc); $("s-ord").textContent = eur(ord); $("s-obj").textContent = eur(obj);
   }
@@ -459,11 +467,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     });
   });
 
-  function setClosed(o, v, btn) {
+  function setFlag(o, campo, v, btn) {
     btn.disabled = true;
-    fetch("/api/ordine?id=" + encodeURIComponent(o.id), { method: "PATCH", headers: { "content-type": "application/json", "x-admin": admin }, body: JSON.stringify({ chiuso: v ? 1 : 0 }) })
+    var body = {}; body[campo] = v ? 1 : 0;
+    fetch("/api/ordine?id=" + encodeURIComponent(o.id), { method: "PATCH", headers: { "content-type": "application/json", "x-admin": admin }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
-        showBanner(r.ok ? (v ? "Ordine segnato come consegnato e pagato." : "Ordine riaperto.") : "Non sono riuscito ad aggiornare l'ordine (errore " + r.status + (j.error ? ": " + j.error : "") + ").");
+        showBanner(r.ok ? "Ordine aggiornato." : "Non sono riuscito ad aggiornare l'ordine (errore " + r.status + (j.error ? ": " + j.error : "") + ").");
         if (!r.ok) btn.disabled = false; return refresh(); }); })
       .catch(function () { btn.disabled = false; showBanner("Connessione assente. Riprova tra poco."); });
   }

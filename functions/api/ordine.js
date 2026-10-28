@@ -61,9 +61,9 @@ export async function onRequestPut({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "richiesta non valida" }, 400); }
 
-  const exists = await env.DB.prepare("SELECT id, chiuso FROM orders WHERE id = ?1").bind(id).first();
+  const exists = await env.DB.prepare("SELECT id, consegnato, pagato FROM orders WHERE id = ?1").bind(id).first();
   if (!exists) return json({ error: "ordine non trovato" }, 404);
-  if (exists.chiuso) return json({ error: "Ordine consegnato e pagato: riaprilo per modificarlo." }, 409);
+  if (exists.consegnato || exists.pagato) return json({ error: "Ordine già consegnato o pagato: togli prima il segno per modificarlo." }, 409);
 
   const r = await leggiRighe(body, env);
   if (r.errore) return r.errore;
@@ -106,9 +106,14 @@ export async function onRequestPatch({ request, env }) {
   if (!env.ADMIN_KEY || !admin || admin !== env.ADMIN_KEY) return json({ error: "non autorizzato" }, 403);
   let body;
   try { body = await request.json(); } catch { return json({ error: "richiesta non valida" }, 400); }
-  const res = await env.DB.prepare("UPDATE orders SET chiuso = ?1 WHERE id = ?2").bind(body.chiuso ? 1 : 0, id).run();
+  const sets = [], vals = [];
+  if ("consegnato" in body) { sets.push("consegnato = ?" + (vals.push(body.consegnato ? 1 : 0))); }
+  if ("pagato" in body) { sets.push("pagato = ?" + (vals.push(body.pagato ? 1 : 0))); }
+  if (!sets.length) return json({ error: "richiesta non valida" }, 400);
+  vals.push(id);
+  const res = await env.DB.prepare("UPDATE orders SET " + sets.join(", ") + " WHERE id = ?" + vals.length).bind(...vals).run();
   if (!res.meta || !res.meta.changes) return json({ error: "ordine non trovato" }, 404);
-  return json({ id, chiuso: body.chiuso ? 1 : 0 });
+  return json({ id });
 }
 
 export async function onRequestDelete({ request, env }) {
@@ -124,19 +129,19 @@ export async function onRequestDelete({ request, env }) {
     token = row.token;
   }
   if (!id || !token) return json({ error: "non autorizzato" }, 403);
-  const cur = await env.DB.prepare("SELECT chiuso FROM orders WHERE id = ?1").bind(id).first();
-  if (cur && cur.chiuso) return json({ error: "Ordine consegnato e pagato: non si può annullare." }, 409);
+  const cur = await env.DB.prepare("SELECT consegnato, pagato FROM orders WHERE id = ?1").bind(id).first();
+  if (cur && (cur.consegnato || cur.pagato)) return json({ error: "Ordine già consegnato o pagato: non si può annullare." }, 409);
 
   const res = await env.DB.batch([
     env.DB.prepare(
       "UPDATE wines SET venduti = venduti - (SELECT qty FROM order_lines WHERE order_id = ?1 AND wine_id = wines.id) " +
       "WHERE id IN (SELECT wine_id FROM order_lines WHERE order_id = ?1) " +
-      "AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0)"
+      "AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND consegnato = 0 AND pagato = 0)"
     ).bind(id, token),
     env.DB.prepare(
-      "DELETE FROM order_lines WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0)"
+      "DELETE FROM order_lines WHERE order_id = ?1 AND EXISTS (SELECT 1 FROM orders WHERE id = ?1 AND token = ?2 AND consegnato = 0 AND pagato = 0)"
     ).bind(id, token),
-    env.DB.prepare("DELETE FROM orders WHERE id = ?1 AND token = ?2 AND chiuso = 0").bind(id, token),
+    env.DB.prepare("DELETE FROM orders WHERE id = ?1 AND token = ?2 AND consegnato = 0 AND pagato = 0").bind(id, token),
   ]);
   const changed = res[2] && res[2].meta ? res[2].meta.changes : 0;
   if (!changed) return json({ error: "ordine non trovato" }, 404);
