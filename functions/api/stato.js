@@ -4,11 +4,15 @@ export async function onRequestGet({ env }) {
   const [w, o, l] = await env.DB.batch([
     env.DB.prepare("SELECT id, cantina, nome, cartoni, bottiglie, prezzo, ord, venduti FROM wines ORDER BY ord"),
     env.DB.prepare("SELECT id, nome, created_at, consegnato, pagato FROM orders ORDER BY created_at"),
-    env.DB.prepare("SELECT order_id, wine_id, qty FROM order_lines"),
+    env.DB.prepare("SELECT order_id, wine_id, qty, prezzo FROM order_lines"),
   ]);
   const byOrder = {};
-  for (const r of l.results) (byOrder[r.order_id] ||= {})[r.wine_id] = r.qty;
-  const orders = o.results.map((r) => ({ id: r.id, nome: r.nome, t: r.created_at, consegnato: r.consegnato ? 1 : 0, pagato: r.pagato ? 1 : 0, righe: byOrder[r.id] || {} }));
+  const prezzi = {};
+  for (const r of l.results) {
+    (byOrder[r.order_id] ||= {})[r.wine_id] = r.qty;
+    if (r.prezzo != null) (prezzi[r.order_id] ||= {})[r.wine_id] = r.prezzo;
+  }
+  const orders = o.results.map((r) => ({ id: r.id, nome: r.nome, t: r.created_at, consegnato: r.consegnato ? 1 : 0, pagato: r.pagato ? 1 : 0, righe: byOrder[r.id] || {}, prezzi: prezzi[r.id] || {} }));
   return json({ vini: w.results, ordini: orders });
 }
 

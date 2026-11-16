@@ -142,6 +142,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ord.done { opacity: .55; filter: grayscale(1); background: var(--line); }
 .ord-edit.on { background: var(--accent); color: #fff; }
 .ord-done { font-size: 12px; font-weight: 600; color: var(--muted); }
+.pz { display: block; margin-top: 6px; font-size: 13px; color: var(--accent); font-weight: 600; }
+.pz input { width: 84px; font: inherit; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); color: var(--fg); }
 .ord-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .ord-edit { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 8px 12px; cursor: pointer; flex: 0 0 auto; }
 .editbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; color: var(--accent); font-weight: 600; }
@@ -200,6 +202,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
   var state = { vini: [], ordini: [] };
   var draft = {};          // wineId -> cartoni scelti
+  var draftPrice = {};     // wineId -> prezzo speciale (solo admin)
+  function unitPrice(w, over) { var p = over && over[w.id]; return (p != null && p !== "" && isFinite(Number(p))) ? Number(p) : w.prezzo; }
   var rows = {};           // wineId -> elementi della riga
   var sig = "";
   var mine = load("vino_miei", []);   // [{id, token}] ordini fatti da questo telefono
@@ -229,6 +233,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     var prev = editing ? editing.prevNome : nomeEl.value;
     editing = { id: o.id, orig: Object.assign({}, o.righe), nome: o.nome, prevNome: prev };
     draft = Object.assign({}, o.righe);
+    draftPrice = Object.assign({}, o.prezzi || {});
     nomeEl.value = o.nome;
     hideMsg(); clampDraft(); updateEditUI(); paint();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -236,7 +241,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function endEdit() {
     if (!editing) return;
     nomeEl.value = editing.prevNome || "";
-    editing = null; draft = {};
+    editing = null; draft = {}; draftPrice = {};
     hideMsg(); updateEditUI(); paint();
   }
   $("editcancel").addEventListener("click", endEdit);
@@ -266,6 +271,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       info.appendChild(el("small", null, sub));
       var remEl = el("div", "rem");
       info.appendChild(remEl);
+      var pz = el("label", "pz"); pz.hidden = true;
+      pz.appendChild(document.createTextNode("Prezzo speciale € "));
+      var pzi = el("input"); pzi.type = "number"; pzi.inputMode = "decimal"; pzi.min = "0"; pzi.step = "0.5"; pzi.placeholder = String(w.prezzo);
+      pz.appendChild(pzi); info.appendChild(pz);
+      pzi.addEventListener("input", function () { if (pzi.value === "") delete draftPrice[w.id]; else draftPrice[w.id] = pzi.value; paint(); });
       var step = el("div", "step");
       var minus = el("button", null, "−"); minus.type = "button"; minus.setAttribute("aria-label", (isB(w) ? "Una bottiglia in meno: " : "Un cartone in meno: ") + w.nome);
       var inp = el("input"); inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.step = "1"; inp.placeholder = "0";
@@ -274,7 +284,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       step.append(minus, inp, plus);
       row.append(info, step);
       winesEl.appendChild(row);
-      rows[w.id] = { row: row, rem: remEl, inp: inp, minus: minus, plus: plus };
+      rows[w.id] = { row: row, rem: remEl, inp: inp, minus: minus, plus: plus, pz: pz, pzi: pzi };
 
       function set(v) {
         var max = rem(wineById(w.id) || w);
@@ -294,7 +304,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       var r = rows[w.id]; if (!r) return;
       var q = draft[w.id] || 0, left = rem(w);
       if (isB(w)) bot += q; else cart += q;
-      money += q * w.prezzo;
+      money += q * unitPrice(w, draftPrice);
+      r.pz.hidden = !(admin && q > 0);
+      if (document.activeElement !== r.pzi) r.pzi.value = draftPrice[w.id] != null ? String(draftPrice[w.id]) : "";
       r.row.classList.toggle("has", q > 0);
       r.row.classList.toggle("out", left <= 0);
       r.rem.textContent = left <= 0 ? "esaurito" : (left === 1 ? "resta " + cnt(1, isB(w)) : "restano " + cnt(left, isB(w)));
@@ -362,10 +374,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       state.vini.forEach(function (w) {
         var q = o.righe[w.id]; if (!q) return;
         if (isB(w)) bot += q; else cart += q;
-        money += q * w.prezzo;
+        money += q * unitPrice(w, o.prezzi);
+        var special = o.prezzi && o.prezzi[w.id] != null && Number(o.prezzi[w.id]) !== w.prezzo;
         var line = el("div", "ord-line");
         line.appendChild(el("b", null, fmt(q)));
-        line.appendChild(el("span", null, w.nome + " · " + w.cantina + (isB(w) ? " (bottiglie)" : "")));
+        line.appendChild(el("span", null, w.nome + " · " + w.cantina + (isB(w) ? " (bottiglie)" : "") + (special ? " · a " + eur(Number(o.prezzi[w.id])) + " l'uno" : "")));
         card.appendChild(line);
       });
       var tot = el("div", "ord-tot");
@@ -385,7 +398,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     state.vini.forEach(function (w) { price[w.id] = w.prezzo; obj += w.cartoni * w.prezzo; });
     state.ordini.forEach(function (o) {
       var t = 0;
-      Object.keys(o.righe).forEach(function (id) { t += o.righe[id] * (price[id] || 0); });
+      Object.keys(o.righe).forEach(function (id) { var pr = (o.prezzi && o.prezzi[id] != null) ? Number(o.prezzi[id]) : (price[id] || 0); t += o.righe[id] * pr; });
       ord += t; if (o.pagato) inc += t;
     });
     $("s-inc").textContent = eur(inc); $("s-ord").textContent = eur(ord); $("s-obj").textContent = eur(obj);
@@ -434,11 +447,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     busy = true; goEl.textContent = "Invio…"; updateGo(); hideMsg();
     var isEdit = !!editing;
     var hdrs = { "content-type": "application/json" };
-    if (isEdit) hdrs["x-admin"] = admin;
+    if (admin) hdrs["x-admin"] = admin;
+    var prezzi = {};
+    Object.keys(draft).forEach(function (id) { if (draftPrice[id] != null && draftPrice[id] !== "") prezzi[id] = draftPrice[id]; });
     fetch(isEdit ? "/api/ordine?id=" + encodeURIComponent(editing.id) : "/api/ordine", {
       method: isEdit ? "PUT" : "POST",
       headers: hdrs,
-      body: JSON.stringify({ nome: nome, righe: draft })
+      body: JSON.stringify({ nome: nome, righe: draft, prezzi: prezzi })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j }; });
     }).then(function (res) {
@@ -450,7 +465,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           return refresh();
         }
         mine.push({ id: res.body.id, token: res.body.token }); save("vino_miei", mine);
-        draft = {};
+        draft = {}; draftPrice = {};
         showBanner("Ordine confermato. Grazie " + nome + "!");
         window.scrollTo({ top: 0, behavior: "smooth" });
         return refresh();

@@ -49,3 +49,5 @@ INSERT OR IGNORE INTO wines (id, cantina, nome, cartoni, bottiglie, prezzo, ord)
 -- ALTER TABLE orders ADD COLUMN consegnato INTEGER NOT NULL DEFAULT 0;
 -- ALTER TABLE orders ADD COLUMN pagato INTEGER NOT NULL DEFAULT 0;
 -- UPDATE orders SET consegnato = chiuso, pagato = chiuso;
+-- Prezzo speciale per riga d'ordine (database già esistente):
+-- ALTER TABLE order_lines ADD COLUMN prezzo REAL;

@@ -2,7 +2,7 @@
 // PUT    /api/ordine?id=...     -> modifica un ordine (solo amministratore, tutto o niente)
 // DELETE /api/ordine?id=...     -> annulla un ordine (serve il codice dell'ordine, oppure la chiave admin)
 
-async function leggiRighe(body, env) {
+async function leggiRighe(body, env, isAdmin) {
   const nome = String(body.nome || "").replace(/\s+/g, " ").trim().slice(0, 40);
   if (!nome) return { errore: json({ error: "Scrivi il tuo nome." }, 400) };
 
@@ -16,7 +16,18 @@ async function leggiRighe(body, env) {
     if (qty > 0) righe.push([wid, qty]);
   }
   if (!righe.length) return { errore: json({ error: "Scegli almeno un cartone o una bottiglia." }, 400) };
-  return { nome, righe };
+  // Prezzo speciale per riga: solo l'amministratore può impostarlo.
+  const prezzi = {};
+  if (isAdmin) {
+    for (const [wid, qty] of righe) {
+      const raw = (body.prezzi || {})[wid];
+      if (raw === undefined || raw === null || raw === "") continue;
+      const p = Math.round(Number(raw) * 100) / 100;
+      if (!Number.isFinite(p) || p <= 0 || p > 9999) return { errore: json({ error: "Prezzo non valido." }, 400) };
+      prezzi[wid] = p;
+    }
+  }
+  return { nome, righe, prezzi };
 }
 
 export async function onRequestPost({ request, env }) {
@@ -25,9 +36,11 @@ export async function onRequestPost({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: "richiesta non valida" }, 400); }
 
-  const r = await leggiRighe(body, env);
+  const adminKey = request.headers.get("x-admin") || "";
+  const isAdmin = !!(env.ADMIN_KEY && adminKey && adminKey === env.ADMIN_KEY);
+  const r = await leggiRighe(body, env, isAdmin);
   if (r.errore) return r.errore;
-  const { nome, righe } = r;
+  const { nome, righe, prezzi } = r;
 
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();
@@ -38,7 +51,7 @@ export async function onRequestPost({ request, env }) {
   }
   stmts.push(env.DB.prepare("INSERT INTO orders (id, nome, token, created_at) VALUES (?1, ?2, ?3, ?4)").bind(id, nome, token, Date.now()));
   for (const [wid, qty] of righe) {
-    stmts.push(env.DB.prepare("INSERT INTO order_lines (order_id, wine_id, qty) VALUES (?1, ?2, ?3)").bind(id, wid, qty));
+    stmts.push(env.DB.prepare("INSERT INTO order_lines (order_id, wine_id, qty, prezzo) VALUES (?1, ?2, ?3, ?4)").bind(id, wid, qty, prezzi[wid] ?? null));
   }
 
   try {
@@ -65,9 +78,9 @@ export async function onRequestPut({ request, env }) {
   if (!exists) return json({ error: "ordine non trovato" }, 404);
   if (exists.consegnato || exists.pagato) return json({ error: "Ordine già consegnato o pagato: togli prima il segno per modificarlo." }, 409);
 
-  const r = await leggiRighe(body, env);
+  const r = await leggiRighe(body, env, true);
   if (r.errore) return r.errore;
-  const { nome, righe } = r;
+  const { nome, righe, prezzi } = r;
 
   // Prima si rimettono a posto i cartoni del vecchio ordine, poi si aggiungono quelli nuovi.
   // Se i nuovi superano i cartoni disponibili, il vincolo CHECK annulla tutto.
@@ -83,7 +96,7 @@ export async function onRequestPut({ request, env }) {
       env.DB.prepare("UPDATE wines SET venduti = venduti + ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM orders WHERE id = ?3)").bind(qty, wid, id)
     );
     stmts.push(
-      env.DB.prepare("INSERT INTO order_lines (order_id, wine_id, qty) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM orders WHERE id = ?1)").bind(id, wid, qty)
+      env.DB.prepare("INSERT INTO order_lines (order_id, wine_id, qty, prezzo) SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM orders WHERE id = ?1)").bind(id, wid, qty, prezzi[wid] ?? null)
     );
   }
   stmts.push(env.DB.prepare("UPDATE orders SET nome = ?1 WHERE id = ?2").bind(nome, id));
